@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: idrn-fe-deployment
+  namespace: idrn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: idrn-fe
+  template:
+    metadata:
+      labels:
+        app: idrn-fe
+    spec:
+      containers:
+      - name: idrn-fe
+        image: gcr.io/grokweb-419218/idrn-fe:latest
+        ports:
+        - containerPort: 80

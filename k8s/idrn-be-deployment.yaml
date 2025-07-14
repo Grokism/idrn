@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: idrn-be-deployment
+  namespace: idrn
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: idrn-be
+  template:
+    metadata:
+      labels:
+        app: idrn-be
+    spec:
+      containers:
+      - name: idrn-be
+        image: gcr.io/grokweb-419218/idrn-be:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: ATLAS_URI
+          valueFrom:
+            secretKeyRef:
+              name: idrn-secrets
+              key: ATLAS_URI
+        - name: DB_NAME
+          value: "idrn"

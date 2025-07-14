@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: idrn-ingress
+  namespace: idrn
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+spec:
+  ingressClassName: "nginx"
+  tls:
+  - hosts:
+    - idrn.grokism.io
+    secretName: idrn-tls-secret
+  rules:
+  - host: idrn.grokism.io
+    http:
+      paths:
+      - path: /api/
+        pathType: Prefix
+        backend:
+          service:
+            name: idrn-be-service
+            port:
+              name: http
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: idrn-fe-service
+            port:
+              name: http

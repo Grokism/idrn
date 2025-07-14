@@ -1,5 +1,5 @@
 # --- Kubernetes Manifests ---
-export K8S_MANIFEST_PATH="/home/robert/git/bookins-io/biprodApp/kubernetes"
+export K8S_MANIFEST_PATH="/home/robert/git/idrn/k8s"
 
 # --- Script ---
 
