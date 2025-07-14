@@ -1,0 +1,42 @@
+<div class="container">
+  <div class="search-container">
+    <select [(ngModel)]="selectedField">
+      <option *ngFor="let field of fields" [value]="field">{{ field }}</option>
+    </select>
+    <input type="text" [(ngModel)]="searchTerm" placeholder="Search...">
+    <button (click)="search()">Search</button>
+    <button (click)="listAll()">List All</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Main Contact Method (Link)</th>
+        <th>Work Description</th>
+        <th>Type</th>
+        <th>Person to Contact</th>
+        <th>Support Method</th>
+        <th>Size of Group</th>
+        <th>Reference</th>
+        <th>Service Sectors</th>
+        <th>IDRN</th>
+        <th>Correspondents Direct Conx</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let item of filteredData">
+        <td>{{ item.name }}</td>
+        <td>{{ item['main contact method (link)'] }}</td>
+        <td>{{ item['work description per event'] }}</td>
+        <td>{{ item.type }}</td>
+        <td>{{ item['person to contact'] }}</td>
+        <td>{{ item['support method'] }}</td>
+        <td>{{ item['size of group'] }}</td>
+        <td>{{ item.reference }}</td>
+        <td>{{ item['service sectors'] }}</td>
+        <td>{{ item.IDRN }}</td>
+        <td>{{ item['Correspondents direct conx'] }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
