@@ -20,7 +20,7 @@ export interface DisasterData {
   providedIn: 'root'
 })
 export class DisasterDataService {
-  private apiUrl = 'http://localhost:3000/disaster-data';
+  private apiUrl = '/api/disaster-data';
 
   constructor(private http: HttpClient) { }
 

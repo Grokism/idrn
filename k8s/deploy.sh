@@ -45,6 +45,10 @@ sed -i -E "s|image: gcr.io/grokweb-419218/idrn-be:.*|image: ${BE_IMAGE_TAG}|" "$
 sed -i -E "s|image: gcr.io/grokweb-419218/idrn-fe:.*|image: ${FE_IMAGE_TAG}|" "${K8S_MANIFEST_PATH}/idrn-fe-deployment.yaml"
 kubectl apply -f "${K8S_MANIFEST_PATH}"
 
+echo "--- Triggering rolling update ---"
+kubectl patch deployment "${BE_DEPLOYMENT_NAME}" -n "${NAMESPACE}" -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"RESTART_TIMESTAMP\":\"$(date +%s)\"}}}}}"
+kubectl patch deployment "${FE_DEPLOYMENT_NAME}" -n "${NAMESPACE}" -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"RESTART_TIMESTAMP\":\"$(date +%s)\"}}}}}"
+
 echo "--- Waiting for rollout to complete ---"
 kubectl rollout status deployment "${BE_DEPLOYMENT_NAME}" -n "${NAMESPACE}"
 kubectl rollout status deployment "${FE_DEPLOYMENT_NAME}" -n "${NAMESPACE}"

@@ -34,7 +34,7 @@ async function main() {
             console.log("Disaster data inserted.");
         }
 
-        app.get('/disaster-data', async (req: Request, res: Response) => {
+        app.get('/api/disaster-data', async (req: Request, res: Response) => {
             try {
                 if (collections.disasterData) {
                     const data = await collections.disasterData.find({}).toArray();
