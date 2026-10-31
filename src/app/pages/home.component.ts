@@ -25,24 +25,24 @@ export interface MemberRecord {
   template: `
     <div *ngIf="orgConfig.config$ | async as cfg">
       <div class="card">
-        <div class="eyebrow">Origin-Verified Member Session · {{ cfg.origin }}</div>
-        <h2>{{ cfg.appName }} — Protected Member Workspace</h2>
+        <div class="eyebrow">Guarded IDRN Administrator Session · {{ cfg.origin }}</div>
+        <h2>IDRN Global Connections — Administrator Workspace</h2>
         <p class="muted" *ngIf="auth.user$ | async as user">
-          Authenticated Handle: <strong>&#64;{{ user.nickname || user.name || user.sub }}</strong>
-          &mdash; click your handle in the top-right header at any time to inspect your disclosed
-          credentials.
+          Authenticated Admin Handle: <strong>&#64;{{ user.nickname || user.name || user.sub }}</strong>
+          &mdash; guarded by both your public <code>amihuman</code> PermSet and your private
+          <code>IDRN Admin</code> PermSet (distinct from a Bookins <code>orgAdmin</code>).
         </p>
 
         <ng-container *ngIf="permsets.access$ | async as evalState">
-          <h3>Private — Disclosed Only to This App ({{ evalState.origin }})</h3>
-          <p class="muted" *ngIf="evalState.originPrivatePermsets.length === 0">
-            No private permsets disclosed for this origin.
+          <h3>IDRN Admin PermSet — Disclosed Only to {{ evalState.origin }}</h3>
+          <p class="muted" *ngIf="evalState.adminPermsets.length === 0">
+            No IDRN Admin permsets disclosed for this origin.
           </p>
           <ul>
-            <li *ngFor="let p of evalState.originPrivatePermsets">
+            <li *ngFor="let p of evalState.adminPermsets">
               <code>{{ p.permset }}</code>
               <span class="tag tag-private" style="margin-left:8px">
-                {{ cfg.orgName | lowercase }} · private
+                idrn · admin
               </span>
               <span class="muted" *ngIf="p.description"> &mdash; {{ p.description }}</span>
             </li>

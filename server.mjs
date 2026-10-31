@@ -84,7 +84,8 @@ function resolveRequestOrigin(req) {
 /**
  * Middleware: Verifies the caller's Auth0 JWT and confirms they hold BOTH:
  * 1) an active public `amihuman` humanity PermSet, AND
- * 2) an active private PermSet scoped to this application's origin (`url === origin`).
+ * 2) an active private `IDRN Admin` PermSet scoped to this application's origin (`url === origin`
+ *    and `description` designates an admin).
  */
 async function requireOriginPermset(req, res, next) {
   try {
@@ -103,12 +104,17 @@ async function requireOriginPermset(req, res, next) {
     let publicPermsets = Array.isArray(tokenPermsets.publicPermsets) ? tokenPermsets.publicPermsets : [];
     let privatePermsets = Array.isArray(tokenPermsets.privatePermsets) ? tokenPermsets.privatePermsets : [];
 
-    // Also query Bookins /api/dapp/permsets if origin-matched private permset is not yet in cached token
-    let matchingPrivate = privatePermsets.filter(
-      (p) => p && p.private !== false && p.status !== 'revoked' && normalizeOrigin(p.url) === reqOrigin
-    );
+    const isAdminOriginPermset = (p) =>
+      p &&
+      p.private !== false &&
+      p.status !== 'revoked' &&
+      normalizeOrigin(p.url) === reqOrigin &&
+      String(p.description || '').toLowerCase().includes('admin');
 
-    if (matchingPrivate.length === 0 && reqOrigin) {
+    // Also query Bookins /api/dapp/permsets if origin-matched admin permset is not yet in cached token
+    let matchingAdmin = privatePermsets.filter(isAdminOriginPermset);
+
+    if (matchingAdmin.length === 0 && reqOrigin) {
       try {
         const dappRes = await fetch(
           `${BOOKINS_API_BASE}/api/dapp/permsets?url=${encodeURIComponent(reqOrigin)}`,
@@ -118,9 +124,7 @@ async function requireOriginPermset(req, res, next) {
           const dappData = await dappRes.json();
           publicPermsets = [...publicPermsets, ...(dappData.publicPermsets || [])];
           privatePermsets = [...privatePermsets, ...(dappData.privatePermsets || [])];
-          matchingPrivate = privatePermsets.filter(
-            (p) => p && p.private !== false && p.status !== 'revoked' && normalizeOrigin(p.url) === reqOrigin
-          );
+          matchingAdmin = privatePermsets.filter(isAdminOriginPermset);
         }
       } catch {
         // ignore fallback error
@@ -142,9 +146,9 @@ async function requireOriginPermset(req, res, next) {
       });
     }
 
-    if (matchingPrivate.length === 0) {
+    if (matchingAdmin.length === 0) {
       return res.status(403).json({
-        error: `Forbidden: No active private PermSet disclosed for origin ${reqOrigin}.`,
+        error: `Forbidden: Active private IDRN Admin PermSet is required for origin ${reqOrigin}.`,
       });
     }
 
@@ -152,8 +156,9 @@ async function requireOriginPermset(req, res, next) {
       sub: payload.sub,
       handle: payload.nickname || payload.name || payload.sub,
       origin: reqOrigin,
-      permset: matchingPrivate[0].permset,
-      permsetDescription: matchingPrivate[0].description || 'Member',
+      permset: matchingAdmin[0].permset,
+      permsetDescription: matchingAdmin[0].description || 'IDRN Admin',
+      isAdmin: true,
     };
 
     next();

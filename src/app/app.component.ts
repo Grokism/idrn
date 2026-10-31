@@ -23,10 +23,7 @@ import { Permset, PermsetService } from './permset.service';
 
         <ng-container *ngIf="auth.isAuthenticated$ | async; else loggedOut">
           <div class="nav-links" *ngIf="permsets.access$ | async as evalState">
-            <a routerLink="/home" class="nav-link">Dashboard</a>
-            <a *ngIf="!evalState.hasOriginPermset" routerLink="/join" class="nav-link">
-              <button>Become a Member</button>
-            </a>
+            <a *ngIf="evalState.isAuthorized" routerLink="/home" class="nav-link">Admin Workspace</a>
 
             <!-- Top-right Credentials Dropdown (matching decenthealth & asot-amihuman) -->
             <div class="dropdown-container" *ngIf="auth.user$ | async as user">
@@ -37,9 +34,12 @@ import { Permset, PermsetService } from './permset.service';
                 [attr.aria-expanded]="isDropdownOpen"
                 title="View your credentials"
               >
-                <span class="user-handle">&#64;{{ user.nickname || user.name || 'member' }}</span>
+                <span class="user-handle">&#64;{{ user.nickname || user.name || 'admin' }}</span>
                 <span class="badge badge-ok" *ngIf="evalState.isHuman">amihuman</span>
-                <span class="badge badge-private" *ngIf="evalState.hasOriginPermset">
+                <span class="badge badge-private" *ngIf="evalState.isIdrnAdmin">
+                  idrn · admin
+                </span>
+                <span class="badge badge-warn" *ngIf="!evalState.isIdrnAdmin && evalState.hasOriginPermset">
                   {{ cfg.orgName | lowercase }} · member
                 </span>
                 <span class="caret" [class.open]="isDropdownOpen">▾</span>
@@ -68,7 +68,9 @@ import { Permset, PermsetService } from './permset.service';
                   <div class="permset-entry" *ngFor="let p of evalState.originPrivatePermsets">
                     <div class="permset-name">
                       <code>{{ p.permset }}</code>
-                      <span class="tag tag-private">{{ cfg.orgName | lowercase }} · private</span>
+                      <span class="tag tag-private">
+                        {{ p.description || (cfg.orgName + ' · private') }}
+                      </span>
                     </div>
                     <p class="permset-explain">{{ privateExplanation(cfg, p) }}</p>
                   </div>
@@ -81,17 +83,17 @@ import { Permset, PermsetService } from './permset.service';
                     evalState.originPrivatePermsets.length === 0
                   "
                 >
-                  No permsets disclosed to this origin yet. Use <strong>Become a Member</strong> to
-                  mint your private {{ cfg.appName }} credential.
+                  No permsets disclosed to this origin yet. An IDRN issuer must mint an
+                  <strong>IDRN Admin</strong> PermSet onto your Bookin.
                 </div>
 
                 <div class="sybil-note">
                   <strong>How these work together:</strong> Because your public
                   <a href="https://amihuman.org" target="_blank" rel="noopener">amihuman.org</a>
-                  humanity credential and your private <strong>{{ cfg.orgName }}</strong> PermSet
+                  humanity credential and your private <strong>IDRN Admin</strong> PermSet
                   are bound to the same pseudonymous handle, <strong>{{ cfg.appName }}</strong>
-                  verifies you are an authorized real human without ever receiving your name, email,
-                  or street address.
+                  verifies you are an authorized IDRN administrator without ever receiving your name,
+                  email, or street address.
                 </div>
               </div>
             </div>
@@ -101,8 +103,7 @@ import { Permset, PermsetService } from './permset.service';
         </ng-container>
 
         <ng-template #loggedOut>
-          <a routerLink="/join" class="nav-link">Become a Member</a>
-          <button (click)="login('/home')">Member Login</button>
+          <button (click)="login('/home')">IDRN Admin Login</button>
         </ng-template>
       </nav>
 

@@ -24,9 +24,11 @@ export interface PermsetEvaluationState {
   accountType: string;
   isHuman: boolean;
   hasOriginPermset: boolean;
+  isIdrnAdmin: boolean;
   isAuthorized: boolean;
   publicPermsets: Permset[];
   originPrivatePermsets: Permset[];
+  adminPermsets: Permset[];
   allPrivatePermsets: Permset[];
 }
 
@@ -74,9 +76,11 @@ export class PermsetService {
             accountType: 'user',
             isHuman: false,
             hasOriginPermset: false,
+            isIdrnAdmin: false,
             isAuthorized: false,
             publicPermsets: [],
             originPrivatePermsets: [],
+            adminPermsets: [],
             allPrivatePermsets: [],
           });
         }
@@ -122,16 +126,20 @@ export class PermsetService {
               combined,
               normalizedTarget
             );
+            const adminPermsets = this.getIdrnAdminPermsets(originPrivatePermsets);
             const hasOriginPermset = originPrivatePermsets.length > 0;
+            const isIdrnAdmin = adminPermsets.length > 0;
 
             return {
               origin: normalizedTarget,
               accountType,
               isHuman,
               hasOriginPermset,
-              isAuthorized: isHuman && hasOriginPermset,
+              isIdrnAdmin,
+              isAuthorized: isHuman && isIdrnAdmin,
               publicPermsets: mergedPublic,
               originPrivatePermsets,
+              adminPermsets,
               allPrivatePermsets: mergedPrivate,
             };
           })
@@ -193,6 +201,18 @@ export class PermsetService {
         p.description !== 'default permset' &&
         normalizeOrigin(p.url) === normalizedTarget
     );
+  }
+
+  /**
+   * Filters origin-scoped private PermSets to those designating an IDRN Administrator
+   * (e.g. `description: "IDRN Admin"`). Note: This is an application-level IDRN Admin
+   * PermSet minted onto an IDRN Bookin, NOT a Bookins orgAdmin / orgUser role.
+   */
+  getIdrnAdminPermsets(originPrivatePermsets: Permset[]): Permset[] {
+    return (originPrivatePermsets || []).filter((p) => {
+      const desc = String(p?.description || '').trim().toLowerCase();
+      return desc.includes('admin');
+    });
   }
 
   evaluateAccess(_targetOrigin?: string): Observable<PermsetEvaluationState> {
