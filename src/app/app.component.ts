@@ -1,6 +1,7 @@
 import { Component, HostListener, OnInit } from '@angular/core';
 import { CommonModule, AsyncPipe } from '@angular/common';
-import { Router, RouterOutlet, RouterLink } from '@angular/router';
+import { NavigationEnd, Router, RouterOutlet, RouterLink } from '@angular/router';
+import { filter } from 'rxjs/operators';
 import { AuthService } from '@auth0/auth0-angular';
 import { OrgConfigService, OrgRuntimeConfig } from './org-config.service';
 import { Permset, PermsetService } from './permset.service';
@@ -10,6 +11,11 @@ import { Permset, PermsetService } from './permset.service';
   standalone: true,
   imports: [CommonModule, RouterOutlet, RouterLink, AsyncPipe],
   template: `
+    <ng-container *ngIf="isLanding; else appShell">
+      <router-outlet></router-outlet>
+    </ng-container>
+
+    <ng-template #appShell>
     <div class="container" *ngIf="orgConfig.config$ | async as cfg">
       <nav class="navbar">
         <div class="nav-brand">
@@ -109,10 +115,12 @@ import { Permset, PermsetService } from './permset.service';
 
       <router-outlet></router-outlet>
     </div>
+    </ng-template>
   `,
 })
 export class AppComponent implements OnInit {
   isDropdownOpen = false;
+  isLanding = true;
 
   constructor(
     public auth: AuthService,
@@ -122,6 +130,11 @@ export class AppComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.syncShell(this.router.url);
+    this.router.events.pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd)).subscribe((event) => {
+      this.syncShell(event.urlAfterRedirects);
+    });
+
     this.orgConfig.loadRuntimeConfig().subscribe();
 
     this.auth.appState$.subscribe((appState) => {
@@ -129,6 +142,12 @@ export class AppComponent implements OnInit {
         this.router.navigateByUrl(appState.target);
       }
     });
+  }
+
+  private syncShell(url: string): void {
+    const path = url.split('?')[0].split('#')[0];
+    this.isLanding = path === '/' || path === '';
+    document.body.classList.toggle('idrn-public-landing', this.isLanding);
   }
 
   toggleDropdown(): void {
