@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: idrn-fe
+  namespace: bookins-paas
+  labels:
+    app: idrn-fe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: idrn-fe
+  template:
+    metadata:
+      labels:
+        app: idrn-fe
+    spec:
+      # No secrets are mounted: this is a static, public SPA.
+      containers:
+        - name: idrn-fe
+          image: ghcr.io/grokism/idrn-fe:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"

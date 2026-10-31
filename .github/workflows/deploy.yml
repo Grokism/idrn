@@ -1,0 +1,65 @@
+name: Build & Publish Bookins PaaS Container (GHCR)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Bookins.io PermSet Protocol & Login Guard Integrity
+        run: |
+          echo "Verifying Bookins.io PermSet protocol guards and login flow..."
+          for required_file in \
+            "src/app/guards/private-permset.guard.ts" \
+            "src/app/guards/amihuman.guard.ts" \
+            "src/app/permset.service.ts" \
+            "src/app/membership.service.ts" \
+            "src/app/pages/join.component.ts" \
+            "src/app/app.routes.ts" \
+            "src/app/app.component.ts" \
+            "server.mjs"; do
+            if [ ! -f "$required_file" ]; then
+              echo "ERROR: Required Bookins PermSet protocol file '$required_file' is missing."
+              exit 1
+            fi
+          done
+
+          grep -q "privatePermsetGuard" src/app/app.routes.ts || {
+            echo "ERROR: src/app/app.routes.ts must keep privatePermsetGuard on protected routes."
+            exit 1
+          }
+          grep -q "loginWithRedirect" src/app/app.component.ts || {
+            echo "ERROR: src/app/app.component.ts must preserve the Bookins Auth0 loginWithRedirect flow."
+            exit 1
+          }
+          grep -q "permset-dropdown" src/app/app.component.ts || {
+            echo "ERROR: src/app/app.component.ts must preserve the top-right Your Credentials dropdown."
+            exit 1
+          }
+          echo "PermSet protocol integrity verified."
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push container image to GHCR
+        run: |
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_TAG="ghcr.io/${OWNER_LC}/idrn-fe:latest"
+          echo "Building and pushing ${IMAGE_TAG}..."
+          docker build -t "${IMAGE_TAG}" .
+          docker push "${IMAGE_TAG}"
+          echo "Successfully pushed ${IMAGE_TAG}. Click 'Deploy Latest from GitHub' in the bookins.io dashboard to roll out to K3s."
