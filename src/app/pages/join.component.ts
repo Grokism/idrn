@@ -66,10 +66,10 @@ export type JoinState =
                 <a [href]="rootVerifierMailto">{{ rootVerifierEmail }}</a>.
               </li>
               <li>
-                <strong>Create your Grokism handle.</strong> Once the verifier attests, Bookins
-                emails you a 48-hour registration link. Register at
-                <a href="https://register.bookins.io" target="_blank" rel="noopener">register.bookins.io</a>;
-                your humanity PermSet is bound to that handle automatically.
+                <strong>Create your Grokism handle.</strong> Once the verifier attests, amihuman.org
+                emails you a registration token. Register at
+                <a href="https://amihuman.org/register" target="_blank" rel="noopener">amihuman.org/register</a>;
+                your humanity PermSet is minted and bound to that handle automatically.
               </li>
               <li>
                 <strong>Come back here</strong> and click <em>Log in and become a member</em>.
@@ -107,8 +107,8 @@ export type JoinState =
           PermSet.
         </p>
         <div class="actions-row">
-          <a href="https://register.bookins.io" target="_blank" rel="noopener">
-            <button type="button">Register at register.bookins.io</button>
+          <a href="https://amihuman.org/register" target="_blank" rel="noopener">
+            <button type="button">Register at amihuman.org</button>
           </a>
           <button type="button" class="secondary" (click)="logout()">Sign out</button>
         </div>
