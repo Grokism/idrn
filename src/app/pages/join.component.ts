@@ -147,31 +147,6 @@ export type JoinState =
         </p>
 
         <form class="join-form" (ngSubmit)="submit()">
-          <div class="form-row" *ngIf="selfEnrollRoles.length > 0">
-            <label>
-              <span>Select Membership Role *</span>
-              <select
-                name="roleKey"
-                [(ngModel)]="form.roleKey"
-                [disabled]="state === 'submitting'"
-              >
-                <option *ngFor="let r of selfEnrollRoles" [value]="r.roleKey">
-                  {{ r.roleLabel }} — {{ r.purpose }}
-                </option>
-              </select>
-            </label>
-            <label *ngIf="selectedRoleScopeLabel">
-              <span>{{ selectedRoleScopeLabel }}</span>
-              <input
-                type="text"
-                name="scopeTag"
-                [(ngModel)]="form.scopeTag"
-                placeholder="e.g. room-sunflower or student-leo"
-                [disabled]="state === 'submitting'"
-              />
-            </label>
-          </div>
-
           <div class="form-row two-col">
             <label>
               <span>First name *</span>
@@ -344,12 +319,6 @@ export class JoinComponent implements OnInit {
   fieldError = '';
   username = '';
   result: EnrollmentResult | null = null;
-  selfEnrollRoles: Array<{
-    roleKey: string;
-    roleLabel: string;
-    purpose: string;
-    scopeLabel?: string;
-  }> = [];
 
   form = {
     firstName: '',
@@ -360,14 +329,7 @@ export class JoinComponent implements OnInit {
     state: 'MN',
     zipCode: '',
     notifyByEmail: true,
-    roleKey: '',
-    scopeTag: '',
   };
-
-  get selectedRoleScopeLabel(): string | undefined {
-    const found = this.selfEnrollRoles.find((r) => r.roleKey === this.form.roleKey);
-    return found?.scopeLabel;
-  }
 
   constructor(
     public auth: AuthService,
@@ -429,12 +391,6 @@ export class JoinComponent implements OnInit {
     try {
       const status = await this.membership.getStatus(this.currentOrigin);
       this.username = status.username || '';
-      if (Array.isArray(status.selfEnrollRoles) && status.selfEnrollRoles.length > 0) {
-        this.selfEnrollRoles = status.selfEnrollRoles;
-        if (!this.form.roleKey) {
-          this.form.roleKey = status.selfEnrollRoles[0].roleKey;
-        }
-      }
       if (status.member && (status.human || claimHuman)) {
         this.state = 'already_member';
         return;
@@ -489,8 +445,6 @@ export class JoinComponent implements OnInit {
           zipCode: this.form.zipCode.trim(),
         },
         notifyByEmail: this.form.notifyByEmail,
-        roleKey: this.form.roleKey || undefined,
-        scopeTag: this.form.scopeTag.trim() || undefined,
       });
       this.permsets.refresh();
       this.state = 'success';

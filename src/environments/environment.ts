@@ -14,9 +14,9 @@ const runtimeOrigin =
 
 export const environment = {
   production: true,
-  appName: resolvePlaceholder('IDRN', 'Bookins PermSet App'),
+  appName: resolvePlaceholder('IDRN Global Connections', 'IDRN Global Connections'),
   appDescription: resolvePlaceholder(
-    'IDRN (IDRN)',
+    'IDRN Global Connections',
     'Zero-PII identity and origin-scoped authorization powered by bookins.io'
   ),
   bookinsApiBase: 'https://bookins.io',

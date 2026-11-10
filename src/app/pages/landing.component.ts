@@ -1,547 +1,81 @@
-import { Component, OnInit } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild, ViewEncapsulation } from '@angular/core';
 import { CommonModule, AsyncPipe } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '@auth0/auth0-angular';
-import {
-  OrgConfigService,
-  OrgRuntimeConfig,
-  PaasUploadedAssetSpec,
-} from '../org-config.service';
+import { OrgConfigService } from '../org-config.service';
 import { PermsetService } from '../permset.service';
 
-interface HealthStatus {
-  status: string;
-  stack?: string;
-  proxy?: string;
-  apiPort?: number;
-  mongoConnected: boolean;
-  dbName: string;
+interface GraphNodeSeed {
+  id: string;
+  name: string;
+  country: string;
+  title: string;
+  flagUrl?: string;
+  logo?: string;
+  structural?: boolean;
+  hideLabel?: boolean;
+}
+
+interface GraphNode extends GraphNodeSeed {
+  event?: boolean;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  fixed?: boolean;
 }
 
 @Component({
   selector: 'app-landing',
   standalone: true,
   imports: [CommonModule, RouterLink, AsyncPipe],
-  template: `
-    <ng-container *ngIf="orgConfig.config$ | async as cfg">
-      <!-- Hero Banner -->
-      <section class="hero-card">
-        <div class="hero-top-badges">
-          <span class="badge badge-ok">&#10003; Live on Bookins PaaS</span>
-          <span class="badge badge-private">
-            {{ cfg.appBlueprint?.archetypeLabel || 'MEAN Stack + Nginx Reverse Proxy' }}
-          </span>
-          <span
-            class="badge"
-            [class.badge-ok]="health?.mongoConnected"
-            [class.badge-warn]="!health?.mongoConnected"
-          >
-            {{
-              health?.mongoConnected
-                ? 'MongoDB Online · ' + health?.dbName
-                : 'Isolated Tenant MongoDB · ' + derivedDbName(cfg)
-            }}
-          </span>
-        </div>
-
-        <div class="hero-split" [style.display]="heroAsset(cfg) ? 'grid' : 'block'" style="grid-template-columns: 1.35fr 1fr; gap: 24px; align-items: center;">
-          <div>
-            <div *ngIf="logoAsset(cfg) as logo" style="margin-bottom: 14px;">
-              <img
-                [src]="logo.publicUrl || logo.assetPath"
-                [alt]="logo.altText || cfg.appName"
-                style="max-height: 56px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14);"
-              />
-            </div>
-
-            <h1 class="hero-title">
-              {{ cfg.appBlueprint?.headline || ('Welcome to ' + cfg.appName) }}
-            </h1>
-            <p class="hero-subtitle">
-              {{ cfg.appBlueprint?.subheadline || cfg.description }}
-            </p>
-            <p class="muted" style="max-width: 780px; margin: 0 0 12px;">
-              <ng-container *ngIf="cfg.appBlueprint?.primaryGoal; else defaultHeroBody">
-                {{ cfg.appBlueprint?.primaryGoal }}
-              </ng-container>
-              <ng-template #defaultHeroBody>
-                <strong>{{ cfg.appName }}</strong> is a full-stack MEAN application (MongoDB, Express,
-                Angular 18, and Node.js) fronted by an <strong>Nginx</strong> public reverse proxy and
-                protected by the <strong>Bookins.io PermSet Protocol</strong>. When you sign in with your
-                Grokism handle, your public <strong>amihuman</strong> proof-of-humanity badge and your
-                private <strong>{{ cfg.orgName }}</strong> PermSet unlock the protected member workspace
-                at <code>{{ cfg.origin }}/home</code> &mdash; with zero PII ever stored in this app.
-              </ng-template>
-            </p>
-
-            <p
-              *ngIf="heroCalloutText(cfg)"
-              style="margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; background: rgba(255,255,255,0.06); border-left: 3px solid var(--accent); color: var(--text); font-size: 14px;"
-            >
-              {{ heroCalloutText(cfg) }}
-            </p>
-
-            <div class="hero-meta-strip">
-              <div class="meta-chip">
-                <span>Public Origin:</span>
-                <strong>{{ cfg.origin }}</strong>
-              </div>
-              <div class="meta-chip">
-                <span>Organization:</span>
-                <strong>{{ cfg.orgName }}</strong>
-              </div>
-              <div class="meta-chip">
-                <span>Edge Gateway:</span>
-                <strong>{{ health?.proxy || 'nginx:80 -> express:3000' }}</strong>
-              </div>
-              <div class="meta-chip">
-                <span>Protected Route:</span>
-                <strong>/home (privatePermsetGuard)</strong>
-              </div>
-            </div>
-          </div>
-
-          <div *ngIf="heroAsset(cfg) as heroImg">
-            <img
-              [src]="heroImg.publicUrl || heroImg.assetPath"
-              [alt]="heroImg.altText || cfg.appName"
-              style="width: 100%; max-height: 300px; object-fit: cover; border-radius: 14px; border: 1px solid rgba(255,255,255,0.14);"
-            />
-          </div>
-        </div>
-
-        <!-- Dynamic CTA Area based on Auth & PermSet State -->
-        <ng-container *ngIf="auth.isAuthenticated$ | async; else loggedOutHero">
-          <ng-container *ngIf="permsets.access$ | async as evalState">
-            <div class="actions-row" *ngIf="evalState.isAuthorized; else needsMembershipHero">
-              <a routerLink="/home">
-                <button>
-                  Open {{ evalState.activeRoleLabel || 'Protected Member' }} Workspace (/home) &rarr;
-                </button>
-              </a>
-              <a routerLink="/join">
-                <button class="secondary">Inspect Membership Status</button>
-              </a>
-            </div>
-            <ng-template #needsMembershipHero>
-              <div
-                class="permset-entry"
-                style="margin-top: 16px; border-color: rgba(245, 158, 11, 0.4);"
-              >
-                <strong>Signed in, awaiting origin PermSet for {{ cfg.origin }}</strong>
-                <p class="permset-explain">
-                  Your handle is authenticated, but it does not yet carry a private
-                  <strong>{{ cfg.orgName }}</strong> PermSet scoped to
-                  <code>{{ cfg.origin }}</code>. Assign one in Bookins.io using
-                  <strong>Add Permset</strong>, or self-enroll below.
-                </p>
-                <div class="actions-row" style="margin-top: 12px;">
-                  <a routerLink="/join"><button>Become a Member &rarr;</button></a>
-                  <button type="button" class="secondary" (click)="permsets.refresh()">
-                    Re-check My Credentials
-                  </button>
-                </div>
-              </div>
-            </ng-template>
-          </ng-container>
-        </ng-container>
-
-        <ng-template #loggedOutHero>
-          <div class="paths-grid">
-            <div class="path-box path-box-highlight">
-              <div>
-                <div class="eyebrow">Have a Handle + PermSet?</div>
-                <h3>Sign In with the PermSet Protocol</h3>
-                <p class="muted">
-                  Already created your Bookin and assigned a
-                  <strong>{{ cfg.orgName }}</strong> PermSet? Sign in with your handle
-                  to go straight to the protected <code>/home</code> workspace.
-                </p>
-              </div>
-              <div class="actions-row">
-                <button type="button" (click)="login('/home')">
-                  PermSet Member Login &rarr;
-                </button>
-              </div>
-            </div>
-
-            <div class="path-box">
-              <div>
-                <div class="eyebrow">Self-Service Enrollment</div>
-                <h3>New to {{ cfg.appName }}?</h3>
-                <p class="muted">
-                  Already hold a Grokism handle with an <strong>amihuman</strong> humanity badge?
-                  Click <strong>Become a Member</strong> to mint your private
-                  <strong>{{ cfg.orgName }}</strong> PermSet on the spot.
-                </p>
-              </div>
-              <div class="actions-row">
-                <a routerLink="/join">
-                  <button type="button" class="secondary">Become a Member &rarr;</button>
-                </a>
-              </div>
-            </div>
-          </div>
-        </ng-template>
-      </section>
-
-      <!-- Template Questionnaire Highlights Section (Rendered when a Web Template was chosen) -->
-      <section
-        class="card"
-        *ngIf="templateHighlightCards(cfg).length > 0 || templateInfoBanner(cfg)"
-      >
-        <div class="section-header">
-          <div>
-            <div class="eyebrow">{{ templateSectionEyebrow(cfg) }}</div>
-            <h2>{{ templateSectionTitle(cfg) }}</h2>
-          </div>
-          <span class="badge badge-ok">Tailored Web Template</span>
-        </div>
-
-        <p class="muted" style="margin-top: 0;" *ngIf="templateInfoBanner(cfg)">
-          {{ templateInfoBanner(cfg) }}
-        </p>
-
-        <div class="feature-grid" *ngIf="templateHighlightCards(cfg).length > 0">
-          <div class="feature-tile" *ngFor="let item of templateHighlightCards(cfg); let i = index">
-            <div class="tile-kicker">
-              <span>{{ templateItemLabel(cfg) }} {{ i + 1 }}</span>
-              <code>Verified Access</code>
-            </div>
-            <h3>{{ item.title }}</h3>
-            <p *ngIf="item.detail">{{ item.detail }}</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Configured PermSet Roles (when custom roles were defined) -->
-      <section class="card" *ngIf="cfg.permsetRoles && cfg.permsetRoles.length > 0">
-        <div class="section-header">
-          <div>
-            <div class="eyebrow">Multi-Role PermSet Access Control</div>
-            <h2>PermSet Roles Configured for {{ cfg.appName }}</h2>
-          </div>
-          <span class="badge badge-ok">Zero-PII Sybil Resistance</span>
-        </div>
-        <p class="muted" style="margin-top: 0;">
-          Each role below is minted onto a member's Bookins handle as an origin-scoped private
-          PermSet (<code>url = {{ cfg.origin }}</code>) and automatically unlocks its tailored
-          workspace view at <code>/home</code>.
-        </p>
-
-        <div class="feature-grid">
-          <div class="feature-tile" *ngFor="let role of cfg.permsetRoles">
-            <div class="tile-kicker">
-              <span>
-                {{
-                  role.enrollmentPolicy === 'self_enroll'
-                    ? 'Self-Enroll (/join)'
-                    : 'Admin Minted in Bookins.io'
-                }}
-              </span>
-              <code>{{ role.roleKey }}</code>
-            </div>
-            <h3>{{ role.roleLabel }} PermSet</h3>
-            <p>{{ role.purpose }}</p>
-            <div *ngIf="role.scopeLabel" class="muted" style="font-size: 12px; margin-top: 6px;">
-              Scope Tag: <strong>{{ role.scopeLabel }}</strong>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Uploaded Visual Gallery (if provided) -->
-      <section class="card" *ngIf="galleryAssets(cfg).length > 0">
-        <div class="section-header">
-          <div>
-            <div class="eyebrow">Visual Showcase</div>
-            <h2>{{ cfg.appName }} Gallery &amp; Media</h2>
-          </div>
-        </div>
-        <div class="feature-grid">
-          <div class="feature-tile" *ngFor="let img of galleryAssets(cfg)">
-            <img
-              [src]="img.publicUrl || img.assetPath"
-              [alt]="img.altText || img.fileName"
-              style="width: 100%; height: 170px; object-fit: cover; border-radius: 10px; margin-bottom: 8px;"
-            />
-            <p style="color: var(--text); font-weight: 600;">{{ img.altText || img.fileName }}</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Section 1: What Bookins.io Built -->
-      <section class="card">
-        <div class="section-header">
-          <div>
-            <div class="eyebrow">Provisioned Stack Architecture</div>
-            <h2>What Bookins.io Built for {{ cfg.appName }}</h2>
-          </div>
-          <span class="badge badge-private">Production-Ready MEAN + Nginx</span>
-        </div>
-
-        <div class="workflow-grid" *ngIf="cfg.appBlueprint?.keyFeatures?.length; else defaultStackGrid" style="margin-bottom: 16px;">
-          <div class="workflow-step" *ngFor="let feat of cfg.appBlueprint?.keyFeatures; let i = index">
-            <div class="step-badge">Feature {{ i + 1 }}</div>
-            <p style="color: var(--text); font-size: 14.5px;">{{ feat }}</p>
-          </div>
-        </div>
-
-        <ng-template #defaultStackGrid>
-          <p class="muted" style="margin-top: 0;">
-            Unlike a static placeholder page, this deployment is a complete, multi-tier
-            <strong>MEAN stack</strong> application running inside the Bookins K3s cluster on the same
-            architectural pattern as <code>decenthealth.io</code>, <code>asot.grokism.io</code>, and
-            <code>decentshare.io</code>.
-          </p>
-        </ng-template>
-
-        <div class="feature-grid">
-          <div class="feature-tile">
-            <div class="tile-kicker">
-              <span>1. Public Edge</span>
-              <code>nginx :80</code>
-            </div>
-            <h3>Nginx Front-Door</h3>
-            <p>
-              Only Nginx on port <code>80</code> is exposed outside the container. It serves the
-              compiled Angular 18 SPA bundles and reverse-proxies <code>/api/*</code> calls to the
-              internal Express server with <code>32k</code> JWT header buffers.
-            </p>
-          </div>
-
-          <div class="feature-tile">
-            <div class="tile-kicker">
-              <span>2. Internal API</span>
-              <code>127.0.0.1:3000</code>
-            </div>
-            <h3>Express + Node.js</h3>
-            <p>
-              <code>server.mjs</code> runs privately on localhost port <code>3000</code>. Its
-              <code>requireOriginPermset</code> middleware verifies Auth0 JWT signatures and confirms
-              both public <code>amihuman</code> and private <code>{{ cfg.origin }}</code> PermSets.
-            </p>
-          </div>
-
-          <div class="feature-tile">
-            <div class="tile-kicker">
-              <span>3. Tenant Database</span>
-              <code>{{ health?.dbName || derivedDbName(cfg) }}</code>
-            </div>
-            <h3>Isolated MongoDB</h3>
-            <p>
-              Automatically provisioned on K3s <code>mongodb-0</code> with a dedicated least-privilege
-              user injected via K8s Secret <code>paas-db-{{ derivedSlug(cfg) }}</code>. All documents
-              are keyed by opaque <code>ps_...</code> handles — zero PII.
-            </p>
-          </div>
-
-          <div class="feature-tile">
-            <div class="tile-kicker">
-              <span>4. Protected UI</span>
-              <code>/home</code>
-            </div>
-            <h3>Angular 18 Workspace</h3>
-            <p>
-              Includes the public landing page (<code>/</code>), self-service enrollment flow
-              (<code>/join</code>), top-right <strong>Your Credentials</strong> inspector, and the
-              guarded member workspace (<code>/home</code>).
-            </p>
-          </div>
-        </div>
-      </section>
-    </ng-container>
-  `,
+  templateUrl: './landing.component.html',
+  styleUrls: ['./landing.component.css'],
+  encapsulation: ViewEncapsulation.None,
 })
-export class LandingComponent implements OnInit {
-  health: HealthStatus | null = null;
+export class LandingComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild('site') site!: ElementRef<HTMLElement>;
+
+  connectionStatus = '';
+
+  private readonly cleanups: Array<() => void> = [];
+  private motionTimer = 0;
+  private sectorFrame = 0;
 
   constructor(
     public auth: AuthService,
     public orgConfig: OrgConfigService,
     public permsets: PermsetService,
-    private http: HttpClient
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
-    this.http.get<HealthStatus>('/api/health').subscribe({
-      next: (res) => {
-        this.health = res;
-      },
-      error: () => {
-        this.health = null;
-      },
+    this.route.queryParamMap.subscribe((params) => {
+      if (params.get('reason')) {
+        setTimeout(() => document.getElementById('admin-login')?.scrollIntoView({ behavior: 'smooth' }), 0);
+      }
     });
   }
 
-  logoAsset(cfg: OrgRuntimeConfig): PaasUploadedAssetSpec | undefined {
-    return cfg.appBlueprint?.uploadedAssets?.find((a) => a.slot === 'logo');
+  ngAfterViewInit(): void {
+    const site = this.site.nativeElement;
+    this.initReveal(site);
+    this.initPageMotion(site);
+    this.initHeaderContrast(site);
+    this.initSectorOrbit(site);
+    this.initRelationshipGraph(site);
   }
 
-  heroAsset(cfg: OrgRuntimeConfig): PaasUploadedAssetSpec | undefined {
-    const uploaded = cfg.appBlueprint?.uploadedAssets?.find((a) => a.slot === 'hero');
-    if (uploaded) {
-      return uploaded;
-    }
-    const arch = cfg.appBlueprint?.archetype || cfg.archetype || 'default';
-    const defaultHeroMap: Record<string, string> = {
-      small_business: 'tpl-small-business.jpg',
-      daycare_school: 'tpl-daycare-school.jpg',
-      ecommerce: 'tpl-ecommerce-store.jpg',
-      wellness_clinic: 'tpl-wellness-clinic.jpg',
-      dao_governance: 'tpl-community-club.jpg',
-      blog_editorial: 'tpl-creator-blog.jpg',
-      personal_creator: 'tpl-creator-blog.jpg',
-      community_social: 'tpl-community-club.jpg',
-    };
-    const file = defaultHeroMap[arch] || 'tpl-small-business.jpg';
-    return {
-      fileName: file,
-      assetPath: `assets/templates/${file}`,
-      publicUrl: `https://bookins.io/assets/templates/${file}`,
-      slot: 'hero',
-      altText: `${cfg.appName} Hero`,
-    };
+  ngOnDestroy(): void {
+    window.clearTimeout(this.motionTimer);
+    if (this.sectorFrame) cancelAnimationFrame(this.sectorFrame);
+    for (const cleanup of this.cleanups) cleanup();
+    this.cleanups.length = 0;
   }
 
-  galleryAssets(cfg: OrgRuntimeConfig): PaasUploadedAssetSpec[] {
-    return (
-      cfg.appBlueprint?.uploadedAssets?.filter(
-        (a) => a.slot === 'gallery' || a.slot === 'feature'
-      ) || []
-    );
-  }
-
-  heroCalloutText(cfg: OrgRuntimeConfig): string {
-    const a = cfg.appBlueprint?.templateAnswers || {};
-    return (
-      a['primaryCtaText'] ||
-      a['schoolMotto'] ||
-      a['memberPerksBanner'] ||
-      a['privacyPromise'] ||
-      a['communityMission'] ||
-      a['subscriberBenefits'] ||
-      ''
-    );
-  }
-
-  templateInfoBanner(cfg: OrgRuntimeConfig): string {
-    const a = cfg.appBlueprint?.templateAnswers || {};
-    return (
-      a['businessHoursAndLocation'] ||
-      a['dailyScheduleHighlights'] ||
-      a['fulfillmentPolicy'] ||
-      a['clinicHoursNote'] ||
-      a['meetingCadence'] ||
-      a['creatorBio'] ||
-      ''
-    );
-  }
-
-  templateSectionEyebrow(cfg: OrgRuntimeConfig): string {
-    const arch = cfg.appBlueprint?.archetype || cfg.archetype || 'default';
-    switch (arch) {
-      case 'small_business':
-        return 'Services & Client Availability';
-      case 'daycare_school':
-        return 'Classrooms, Programs & Daily Rhythm';
-      case 'ecommerce':
-        return 'Featured Storefront Catalog & Fulfillment';
-      case 'wellness_clinic':
-        return 'Practice Specialties & Care Programs';
-      case 'dao_governance':
-        return 'Community Priorities & Member Governance';
-      case 'blog_editorial':
-        return 'Featured Columns & Publication Highlights';
-      default:
-        return 'Featured Highlights';
-    }
-  }
-
-  templateItemLabel(cfg: OrgRuntimeConfig): string {
-    const arch = cfg.appBlueprint?.archetype || cfg.archetype || 'default';
-    switch (arch) {
-      case 'small_business':
-        return 'Service';
-      case 'daycare_school':
-        return 'Classroom / Program';
-      case 'ecommerce':
-        return 'Featured Item';
-      case 'wellness_clinic':
-        return 'Care Specialty';
-      case 'dao_governance':
-        return 'Priority';
-      case 'blog_editorial':
-        return 'Series';
-      default:
-        return 'Highlight';
-    }
-  }
-
-  templateSectionTitle(cfg: OrgRuntimeConfig): string {
-    const arch = cfg.appBlueprint?.archetype || cfg.archetype || 'default';
-    switch (arch) {
-      case 'small_business':
-        return `${cfg.appName} Services & Client Portal`;
-      case 'daycare_school':
-        return `${cfg.appName} Classrooms & Daily Schedule`;
-      case 'ecommerce':
-        return `${cfg.appName} Featured Catalog`;
-      case 'wellness_clinic':
-        return `${cfg.appName} Care Programs & Specialties`;
-      case 'dao_governance':
-        return `${cfg.appName} Mission & Active Initiatives`;
-      case 'blog_editorial':
-        return `Inside ${cfg.appName}`;
-      default:
-        return `${cfg.appName} Overview`;
-    }
-  }
-
-  templateHighlightCards(cfg: OrgRuntimeConfig): Array<{ title: string; detail: string }> {
-    const a = cfg.appBlueprint?.templateAnswers || {};
-    const rawList =
-      a['servicesOffered'] ||
-      a['classroomsServed'] ||
-      a['featuredProducts'] ||
-      a['practiceSpecialties'] ||
-      a['initialProposals'] ||
-      a['featuredColumns'] ||
-      '';
-    return rawList
-      .split(/\n+/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const parts = line
-          .split(/[·—-]/)
-          .map((p) => p.trim())
-          .filter(Boolean);
-        if (parts.length > 1) {
-          return { title: parts[0], detail: parts.slice(1).join(' · ') };
-        }
-        return { title: line, detail: 'Protected by zero-PII PermSet access control.' };
-      });
-  }
-
-  derivedSlug(cfg: OrgRuntimeConfig): string {
-    try {
-      const host = new URL(cfg.origin).hostname.toLowerCase();
-      if (host.endsWith('.apps.bookins.io')) {
-        return host.slice(0, -'.apps.bookins.io'.length) || 'app';
-      }
-      if (host.endsWith('.bookins.io')) {
-        return host.slice(0, -'.bookins.io'.length) || 'app';
-      }
-      return host.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'app';
-    } catch {
-      return 'app';
-    }
-  }
-
-  derivedDbName(cfg: OrgRuntimeConfig): string {
-    return `paas_${this.derivedSlug(cfg).replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
+  onStartConnectionSubmit(event: Event): void {
+    event.preventDefault();
+    this.connectionStatus = 'Connection requests are not open on this site yet.';
   }
 
   login(target = '/home'): void {
@@ -553,5 +87,423 @@ export class LandingComponent implements OnInit {
         },
       })
       .subscribe();
+  }
+
+  logout(): void {
+    this.auth.logout({ logoutParams: { returnTo: window.location.origin } }).subscribe();
+  }
+
+  private listen(target: Window | HTMLElement, type: string, handler: EventListener, options?: AddEventListenerOptions): void {
+    target.addEventListener(type, handler, options);
+    this.cleanups.push(() => target.removeEventListener(type, handler, options));
+  }
+
+  private initReveal(site: HTMLElement): void {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.16 }
+    );
+    site.querySelectorAll('.reveal').forEach((item) => observer.observe(item));
+    this.cleanups.push(() => observer.disconnect());
+  }
+
+  private initPageMotion(site: HTMLElement): void {
+    const markPageMoving = () => {
+      site.classList.add('page-is-moving');
+      window.clearTimeout(this.motionTimer);
+      this.motionTimer = window.setTimeout(() => site.classList.remove('page-is-moving'), 240);
+    };
+    this.listen(window, 'scroll', markPageMoving, { passive: true });
+    this.listen(window, 'wheel', markPageMoving, { passive: true });
+    this.listen(window, 'touchmove', markPageMoving, { passive: true });
+  }
+
+  private initHeaderContrast(site: HTMLElement): void {
+    const header = site.querySelector('.site-header') as HTMLElement | null;
+    if (!header) return;
+    const measureHeader = () => {
+      site.style.setProperty('--site-header-height', `${header.getBoundingClientRect().height}px`);
+    };
+    measureHeader();
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(measureHeader);
+      observer.observe(header);
+      this.cleanups.push(() => observer.disconnect());
+    }
+    this.listen(window, 'resize', measureHeader, { passive: true });
+
+    const update = () => {
+      const x = window.innerWidth / 2;
+      const y = Math.max(1, header.getBoundingClientRect().bottom + 8);
+      const section = document.elementFromPoint(x, y)?.closest('section, footer, main');
+      const onDark = Boolean(section?.classList.contains('section-dark') || section?.classList.contains('hero'));
+      header.classList.toggle('on-dark', onDark);
+    };
+    update();
+    this.listen(window, 'scroll', () => requestAnimationFrame(update), { passive: true });
+    this.listen(window, 'resize', () => requestAnimationFrame(update), { passive: true });
+  }
+
+  private initSectorOrbit(site: HTMLElement): void {
+    const orbit = site.querySelector('.sector-orbit') as HTMLElement | null;
+    if (!orbit) return;
+    const svg = orbit.querySelector('.sector-edges') as SVGSVGElement | null;
+    const collage = orbit.querySelector('.sector-collage') as HTMLImageElement | null;
+    const labels = Array.from(orbit.querySelectorAll<HTMLElement>('[data-sector-node]'));
+    const namespace = 'http://www.w3.org/2000/svg';
+    const descriptions: Record<string, string> = {
+      'Accounting/Finance': 'Financial resource management and accountability.',
+      Communications: 'Information flow, IT, translation, media, telecom, and radio.',
+      'Development/Resilience': 'Infrastructure, build back better, mitigation, and community resilience.',
+      Field: 'Direct on-the-ground response, field teams, assessments, and survivor support.',
+      'Health/Medical/WASH': 'Medical response, sanitation, hygiene, WASH support, and personnel deployment.',
+      Logistics: 'Procurement, storage, transport, warehousing, and distribution.',
+      Management: 'Strategy, coordination, reporting, and operations center leadership.',
+      Networking: 'Relationship building and network strengthening.',
+      "Policy/Legal/Gov't": 'Governance, frameworks, legal support, and public-sector liaison.',
+      'Research/Data/Reporting': 'Data synthesis, needs analysis, research, and reporting.',
+      Security: 'Physical safety, data protection, cyber infrastructure, and risk awareness.',
+      Training: 'Training, exercises, preparedness skills, and practical learning.',
+      'Well-being/Wellness': 'Trauma care, counseling, spiritual care, and responder wellness.',
+      'Unspecified/General': 'Broad or unclassified involvement, interest, or capability.',
+    };
+    const popup = document.createElement('aside');
+    popup.className = 'sector-popup';
+    popup.setAttribute('role', 'dialog');
+    popup.setAttribute('aria-live', 'polite');
+    popup.hidden = true;
+    orbit.appendChild(popup);
+
+    const hidePopup = () => {
+      popup.hidden = true;
+      orbit.classList.remove('popup-open');
+      orbit.closest('.object-frame')?.classList.remove('popup-open');
+      labels.forEach((label) => label.classList.remove('active'));
+    };
+
+    const showPopup = (label: HTMLElement) => {
+      const name = (label.textContent || '').trim();
+      const color = getComputedStyle(label).getPropertyValue('--sector').trim() || '#134e84';
+      const orbitRect = orbit.getBoundingClientRect();
+      const labelRect = label.getBoundingClientRect();
+      const left = labelRect.left - orbitRect.left + labelRect.width / 2;
+      const top = labelRect.top - orbitRect.top + labelRect.height / 2;
+      labels.forEach((item) => item.classList.toggle('active', item === label));
+      orbit.classList.add('popup-open');
+      orbit.closest('.object-frame')?.classList.add('popup-open');
+      popup.innerHTML = `
+        <strong class="sector-popup-title">${name}</strong>
+        <p>${descriptions[name] || 'An IDRN designation area documenting skill, interest, or response capability.'}</p>
+        <em>Designators document areas of skill &amp; interest for IDRN Members</em>
+      `;
+      popup.style.setProperty('--popup-color', color);
+      popup.style.left = `${left}px`;
+      popup.style.top = `${top}px`;
+      popup.hidden = false;
+    };
+
+    labels.forEach((label) => {
+      label.setAttribute('tabindex', '0');
+      label.setAttribute('role', 'button');
+      label.setAttribute('aria-label', `${(label.textContent || '').trim()} designation details`);
+      const onClick = (event: Event) => {
+        event.stopPropagation();
+        if (!popup.hidden && label.classList.contains('active')) hidePopup();
+        else showPopup(label);
+      };
+      const onKey = (event: Event) => {
+        const key = (event as KeyboardEvent).key;
+        if (key === 'Enter' || key === ' ') {
+          event.preventDefault();
+          label.click();
+        }
+      };
+      label.addEventListener('click', onClick);
+      label.addEventListener('keydown', onKey);
+      this.cleanups.push(() => {
+        label.removeEventListener('click', onClick);
+        label.removeEventListener('keydown', onKey);
+      });
+    });
+
+    const onOrbitClick = (event: Event) => {
+      const target = event.target as Element | null;
+      if (!target?.closest('[data-sector-node], .sector-popup')) hidePopup();
+    };
+    orbit.addEventListener('click', onOrbitClick);
+    this.cleanups.push(() => orbit.removeEventListener('click', onOrbitClick));
+    this.listen(document as unknown as HTMLElement, 'keydown', ((event: Event) => {
+      if ((event as KeyboardEvent).key === 'Escape') hidePopup();
+    }) as EventListener);
+
+    const draw = () => {
+      if (!svg || !collage) return;
+      const orbitRect = orbit.getBoundingClientRect();
+      const imageRect = collage.getBoundingClientRect();
+      svg.setAttribute('viewBox', `0 0 ${orbitRect.width} ${orbitRect.height}`);
+      svg.innerHTML = '';
+      labels.forEach((label) => {
+        const color = getComputedStyle(label).getPropertyValue('--sector').trim() || '#134e84';
+        const labelRect = label.getBoundingClientRect();
+        const targetX = labelRect.left - orbitRect.left + labelRect.width / 2;
+        const targetY = labelRect.top - orbitRect.top + labelRect.height / 2;
+        const anchors = (label.dataset['anchor'] || '')
+          .split(';')
+          .map((pair) => pair.split(',').map(Number))
+          .filter((pair): pair is [number, number] => pair.length === 2 && pair.every(Number.isFinite));
+        anchors.forEach(([x, y]) => {
+          const sourceX = imageRect.left - orbitRect.left + (imageRect.width * x) / 100;
+          const sourceY = imageRect.top - orbitRect.top + (imageRect.height * y) / 100;
+          const line = document.createElementNS(namespace, 'line');
+          line.setAttribute('x1', String(sourceX));
+          line.setAttribute('y1', String(sourceY));
+          line.setAttribute('x2', String(targetX));
+          line.setAttribute('y2', String(targetY));
+          line.style.setProperty('--edge-color', color);
+          svg.appendChild(line);
+          const point = document.createElementNS(namespace, 'circle');
+          point.setAttribute('cx', String(sourceX));
+          point.setAttribute('cy', String(sourceY));
+          point.setAttribute('r', '4');
+          point.style.setProperty('--edge-color', color);
+          svg.appendChild(point);
+        });
+      });
+    };
+
+    const drawLoop = () => {
+      draw();
+      this.sectorFrame = requestAnimationFrame(drawLoop);
+    };
+    if (collage?.complete) drawLoop();
+    else collage?.addEventListener('load', drawLoop, { once: true });
+    this.listen(window, 'resize', draw as EventListener, { passive: true });
+  }
+
+  private initRelationshipGraph(site: HTMLElement): void {
+    const svg = site.querySelector('#idrn-relationship-graph') as SVGSVGElement | null;
+    const details = site.querySelector('#relationship-details') as HTMLElement | null;
+    if (!svg || !details) return;
+
+    const circleFlagBaseUrl = 'https://hatscripts.github.io/circle-flags/flags';
+    const flagUrl = (code: string) => `${circleFlagBaseUrl}/${code}.svg`;
+    const seeds: GraphNodeSeed[] = [
+      { id: 'Pradeep', name: 'Pradeep', country: 'India', flagUrl: flagUrl('in'), title: 'Independent consultant, trainer, creator' },
+      { id: 'Yolande', name: 'Yolande', country: 'South Africa', flagUrl: flagUrl('za'), title: 'Head of regional crisis response non-profit' },
+      { id: 'Evert', name: 'Evert', country: 'Netherlands', flagUrl: flagUrl('nl'), title: 'Head of a global crisis response technology group' },
+      { id: 'Timothy', name: 'Timothy', country: 'Korea', logo: '/assets/idrn-south-korea-node.png', title: 'Leader of IDRN South Korea' },
+      { id: 'Tim', name: 'Tim', country: 'UK', flagUrl: flagUrl('gb'), title: 'Retired Major General from the British Army, CBE' },
+      { id: 'Newt', name: 'Newt', country: 'Canada', flagUrl: flagUrl('ca'), title: 'Crisis response expert, consultant' },
+      { id: 'Elmer', name: 'Elmer', country: 'Philippines', logo: '/assets/idrn-philippines-node.png', title: 'Leader of IDRN Philippines' },
+      { id: 'Daron', name: 'Daron', country: 'Malaysia', flagUrl: flagUrl('my'), title: 'Regional leader, local pastor' },
+      { id: 'Andy', name: 'Andy', country: 'Portugal', flagUrl: flagUrl('pt'), title: 'Founder of BuildSOS' },
+      { id: 'Yazi', name: 'Yazi', country: 'Niger', flagUrl: flagUrl('ne'), title: 'Leader of IDRN Africa' },
+      { id: 'Moses', name: 'Moses', country: 'Kenya', flagUrl: flagUrl('ke'), title: 'Young media producer, volunteer' },
+      { id: 'Vivek', name: 'Vivek', country: 'USA', flagUrl: flagUrl('us'), title: 'Founder of PERCI' },
+      { id: 'Adeel', name: 'Adeel', country: 'Pakistan', flagUrl: flagUrl('pk'), title: 'Regional non-profit leader' },
+      { id: 'Gabriel', name: 'Gabriel', country: 'Brazil', flagUrl: flagUrl('br'), title: 'Software developer, volunteer' },
+      { id: 'Matt', name: 'Matt', country: 'USA', flagUrl: flagUrl('us'), title: 'IDRN Global, network champion' },
+      { id: 'IDRN Global', name: 'International Advisors', country: 'Global', title: 'Facilitating and supporting the wider network', logo: '/assets/idrn-global-mark.png', structural: true, hideLabel: true },
+      { id: 'IDRN Africa', name: 'IDRN Africa', country: 'Africa', title: 'Developing IDRN presence across Africa', logo: '/assets/idrn-africa-node.png', structural: true },
+      { id: 'IDRN Network', name: 'IDRN Network', country: 'Global', title: 'The wider International Disaster Response Network', logo: '/assets/idrn-disaster-network-logo-small.png', structural: true, hideLabel: true },
+    ];
+
+    const width = svg.clientWidth || 720;
+    const height = svg.clientHeight || 560;
+    const nodeById = new Map<string, GraphNode>(
+      seeds.map((node, index) => [
+        node.id,
+        {
+          ...node,
+          x: width / 2 + Math.cos(index) * width * 0.25,
+          y: height * 0.42 + Math.sin(index) * height * 0.22,
+          vx: 0,
+          vy: 0,
+        },
+      ])
+    );
+    let selectedId: string | null = null;
+
+    const staticLinks = [
+      ...['Gabriel', 'Tim', 'Adeel', 'Daron', 'Pradeep', 'Elmer', 'Yolande'].map((source) => ({ source, target: 'IDRN Global', type: 'static' })),
+      ...['Moses', 'Yolande', 'Yazi'].map((source) => ({ source, target: 'IDRN Africa', type: 'static' })),
+      ...['Evert', 'Vivek', 'Newt', 'Matt', 'Andy', 'Timothy', 'Elmer', 'Daron', 'Yazi', 'IDRN Global'].map((source) => ({ source, target: 'IDRN Network', type: 'static' })),
+      { source: 'Matt', target: 'IDRN Global', type: 'static' },
+    ];
+    const peerLinks: Record<string, string[]> = {
+      Gabriel: ['Matt', 'IDRN Network'],
+      Daron: ['Matt', 'Elmer'],
+      Elmer: ['Daron', 'Matt', 'Yazi'],
+      Pradeep: ['Matt'],
+    };
+    const expoParticipants = ['Newt', 'Andy', 'Matt', 'Daron', 'Evert'];
+    const istanbulParticipants = ['Yolande', 'Matt', 'Yazi', 'Elmer', 'Adeel'];
+    const expoNodes = new Set(expoParticipants);
+    const istanbulNodes = new Set(istanbulParticipants);
+
+    const activeLinks = () => {
+      const links = [...staticLinks];
+      if (selectedId) {
+        (peerLinks[selectedId] || []).forEach((target) => links.push({ source: selectedId as string, target, type: 'peer' }));
+        if (expoNodes.has(selectedId)) {
+          expoParticipants.forEach((source) => links.push({ source, target: 'Disaster EXPO', type: 'event' }));
+        }
+        if (istanbulNodes.has(selectedId)) {
+          istanbulParticipants.forEach((source) => links.push({ source, target: 'Istanbul Mtg', type: 'event' }));
+        }
+      }
+      return links;
+    };
+
+    const activeNodes = (): GraphNode[] => {
+      const nodes = [...nodeById.values()];
+      if (selectedId && expoNodes.has(selectedId)) {
+        nodes.push({ id: 'Disaster EXPO', name: 'Disaster EXPO', country: 'Event', title: 'Shared event context', event: true, x: width * 0.72, y: height * 0.2, vx: 0, vy: 0 });
+      }
+      if (selectedId && istanbulNodes.has(selectedId)) {
+        nodes.push({ id: 'Istanbul Mtg', name: 'Istanbul Mtg', country: 'Event', title: '2024 IDRN Gathering', event: true, x: width * 0.76, y: height * 0.78, vx: 0, vy: 0 });
+      }
+      return nodes;
+    };
+
+    const renderDetails = (node: GraphNode | null) => {
+      if (!node) {
+        details.innerHTML = '<p class="kicker">Select a node</p><h3>Relationship map</h3><p>Click a person or network node to reveal details, peer links, and shared event context.</p>';
+        return;
+      }
+      details.innerHTML = `<p class="kicker">${node.country || 'Network'}</p><h3>${node.name}</h3><p>${node.title}</p>`;
+    };
+
+    const tick = (nodes: GraphNode[], links: Array<{ source: string; target: string; type: string }>) => {
+      const lookup = new Map(nodes.map((node) => [node.id, node]));
+      for (let i = 0; i < 70; i += 1) {
+        for (let a = 0; a < nodes.length; a += 1) {
+          for (let b = a + 1; b < nodes.length; b += 1) {
+            const first = nodes[a];
+            const second = nodes[b];
+            const dx = second.x - first.x || 0.01;
+            const dy = second.y - first.y || 0.01;
+            const dist = Math.max(22, Math.hypot(dx, dy));
+            const force = (first.structural || second.structural ? 1260 : 920) / (dist * dist);
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            first.vx -= fx;
+            first.vy -= fy;
+            second.vx += fx;
+            second.vy += fy;
+          }
+        }
+        links.forEach((link) => {
+          const source = lookup.get(link.source);
+          const target = lookup.get(link.target);
+          if (!source || !target) return;
+          const dx = target.x - source.x;
+          const dy = target.y - source.y;
+          const dist = Math.max(1, Math.hypot(dx, dy));
+          const desired = link.type === 'static' ? 162 : 128;
+          const force = (dist - desired) * 0.015;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          source.vx += fx;
+          source.vy += fy;
+          target.vx -= fx;
+          target.vy -= fy;
+        });
+        nodes.forEach((node) => {
+          if (node.fixed) return;
+          node.vx += (width / 2 - node.x) * 0.002;
+          node.vy += (height * 0.42 - node.y) * 0.002;
+          node.vx *= 0.78;
+          node.vy *= 0.78;
+          node.x = Math.min(width - 46, Math.max(46, node.x + node.vx));
+          node.y = Math.min(height - 46, Math.max(46, node.y + node.vy));
+        });
+      }
+    };
+
+    const paint = () => {
+      const nodes = activeNodes();
+      const links = activeLinks();
+      tick(nodes, links);
+      svg.innerHTML = '';
+      const lookup = new Map(nodes.map((node) => [node.id, node]));
+      const linkLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      linkLayer.setAttribute('class', 'graph-links');
+      svg.appendChild(linkLayer);
+      links.forEach((link) => {
+        const source = lookup.get(link.source);
+        const target = lookup.get(link.target);
+        if (!source || !target) return;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', String(source.x));
+        line.setAttribute('y1', String(source.y));
+        line.setAttribute('x2', String(target.x));
+        line.setAttribute('y2', String(target.y));
+        const isSelectedLink = selectedId && (link.source === selectedId || link.target === selectedId);
+        line.setAttribute('class', `graph-link ${link.type}${isSelectedLink ? ' selected-link' : ''}`);
+        linkLayer.appendChild(line);
+      });
+      const nodeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      svg.appendChild(nodeLayer);
+      nodes.forEach((node) => {
+        const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        group.setAttribute('class', `graph-node ${selectedId === node.id ? 'selected' : ''}`);
+        group.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+        group.setAttribute('tabindex', '0');
+        group.setAttribute('role', 'button');
+        group.setAttribute('aria-label', `${node.name}, ${node.title}`);
+        const foreign = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+        foreign.setAttribute('x', '-24');
+        foreign.setAttribute('y', '-24');
+        foreign.setAttribute('width', '48');
+        foreign.setAttribute('height', '48');
+        const face = document.createElement('div');
+        face.className = `node-face ${node.structural ? 'structural-face' : ''} ${node.event ? 'event-face' : ''}`;
+        if (node.logo) {
+          const img = document.createElement('img');
+          img.src = node.logo;
+          img.alt = '';
+          face.appendChild(img);
+        } else if (node.event) {
+          face.textContent = node.id === 'Disaster EXPO' ? 'EX' : 'IM';
+        } else if (node.flagUrl) {
+          const img = document.createElement('img');
+          img.src = node.flagUrl;
+          img.alt = '';
+          face.appendChild(img);
+        }
+        foreign.appendChild(face);
+        group.appendChild(foreign);
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('y', '38');
+        label.setAttribute('text-anchor', 'middle');
+        label.textContent = node.hideLabel ? '' : node.name;
+        if (!node.hideLabel) group.appendChild(label);
+        group.addEventListener('click', (event) => {
+          event.stopPropagation();
+          selectedId = selectedId === node.id ? null : node.id;
+          renderDetails(selectedId ? lookup.get(selectedId) || null : null);
+          paint();
+        });
+        nodeLayer.appendChild(group);
+      });
+    };
+
+    const onSvgClick = () => {
+      selectedId = null;
+      renderDetails(null);
+      paint();
+    };
+    svg.addEventListener('click', onSvgClick);
+    this.cleanups.push(() => svg.removeEventListener('click', onSvgClick));
+    this.listen(window, 'resize', () => requestAnimationFrame(paint));
+    paint();
   }
 }
