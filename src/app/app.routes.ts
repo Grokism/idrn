@@ -8,6 +8,5 @@ export const routes: Routes = [
   { path: '', component: LandingComponent },
   { path: 'join', component: JoinComponent },
   { path: 'home', component: HomeComponent, canActivate: [privatePermsetGuard] },
-  { path: 'admin', component: HomeComponent, canActivate: [privatePermsetGuard] },
   { path: '**', redirectTo: '' },
 ];

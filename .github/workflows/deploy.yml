@@ -27,6 +27,8 @@ jobs:
             "src/app/pages/join.component.ts" \
             "src/app/app.routes.ts" \
             "src/app/app.component.ts" \
+            "nginx.conf" \
+            "docker-entrypoint.sh" \
             "server.mjs"; do
             if [ ! -f "$required_file" ]; then
               echo "ERROR: Required Bookins PermSet protocol file '$required_file' is missing."

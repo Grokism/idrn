@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "templateId": "default",
+  "label": "Standard PermSet Member Portal (Default MEAN + Nginx)",
+  "cardTitle": "Standard Member Portal",
+  "cardBadge": "PermSet MEAN App",
+  "cardIcon": "🛡️",
+  "accentColor": "#4f46e5",
+  "summary": "Clean multi-tenant MEAN stack portal with public landing page, /join self-enrollment, and protected /home workspace.",
+  "defaultTheme": "midnight_slate",
+  "defaultHeadlineSuffix": "Member & Developer Portal",
+  "defaultGoal": "Provide a sybil-resistant, zero-PII member workspace backed by an isolated K3s MongoDB database and Nginx reverse proxy.",
+  "preserveDeveloperPages": true,
+  "defaultFeatures": [
+    "Public landing page with PermSet Member Login and /join self-enrollment",
+    "Protected /home member workspace with isolated MongoDB CRUD (/api/records)",
+    "Top-right Disclosed Credentials dropdown showing public amihuman + private origin PermSet"
+  ],
+  "defaultRoles": [
+    {
+      "roleKey": "admin",
+      "roleLabel": "Portal Admin",
+      "purpose": "Publish announcements, manage member records, and oversee cohort tags.",
+      "enrollmentPolicy": "issuer_only",
+      "scopeLabel": "Cohort / Group Tag (optional)"
+    },
+    {
+      "roleKey": "member",
+      "roleLabel": "Verified Member",
+      "purpose": "Access protected /home workspace, view shared cohort records, and submit updates.",
+      "enrollmentPolicy": "self_enroll",
+      "scopeLabel": "Cohort / Group Tag (optional)"
+    }
+  ],
+  "templateQuestions": [
+    {
+      "key": "primaryCtaText",
+      "label": "1. Primary Call-to-Action & Welcome Promise",
+      "placeholder": "e.g. Sign in with your private PermSet handle — zero personal data stored.",
+      "hint": "Displayed in the hero callout banner on the public landing page (TEMPLATE_CONFIG.templateAnswers.primaryCtaText).",
+      "defaultValue": "Access your workspace with 100% zero-PII sybil-resistant PermSet credentials."
+    },
+    {
+      "key": "servicesOffered",
+      "label": "2. Featured Portal Highlights (one per line, Title — Detail)",
+      "placeholder": "e.g. Member Directory — Scoped by cohort tag\nResource Library — Protected documents",
+      "hint": "Rendered as highlight cards on the landing page (TEMPLATE_CONFIG.templateAnswers.servicesOffered).",
+      "defaultValue": "Zero-PII Identity — Verified by Amihuman + Bookins PermSets\nIsolated K3s MongoDB — Dedicated per-app tenant database\nRole & Cohort Scoping — Fine-grained access without storing emails or names",
+      "multiline": true
+    },
+    {
+      "key": "deliverableCategories",
+      "label": "3. Member Workspace Categories (comma-separated)",
+      "placeholder": "e.g. Announcement, Milestone, Member Request, Resource",
+      "hint": "Populates the category selector in /home (TEMPLATE_CONFIG.templateAnswers.deliverableCategories).",
+      "defaultValue": "Announcement, Milestone, Member Note, Resource"
+    }
+  ]
+}

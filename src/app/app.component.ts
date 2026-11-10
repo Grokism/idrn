@@ -1,7 +1,6 @@
 import { Component, HostListener, OnInit } from '@angular/core';
 import { CommonModule, AsyncPipe } from '@angular/common';
-import { NavigationEnd, Router, RouterOutlet, RouterLink } from '@angular/router';
-import { filter } from 'rxjs/operators';
+import { Router, RouterOutlet, RouterLink } from '@angular/router';
 import { AuthService } from '@auth0/auth0-angular';
 import { OrgConfigService, OrgRuntimeConfig } from './org-config.service';
 import { Permset, PermsetService } from './permset.service';
@@ -11,25 +10,27 @@ import { Permset, PermsetService } from './permset.service';
   standalone: true,
   imports: [CommonModule, RouterOutlet, RouterLink, AsyncPipe],
   template: `
-    <ng-container *ngIf="isLanding; else appShell">
-      <router-outlet></router-outlet>
-    </ng-container>
-
-    <ng-template #appShell>
     <div class="container" *ngIf="orgConfig.config$ | async as cfg">
       <nav class="navbar">
         <div class="nav-brand">
+          <span class="brand-mark">{{ (cfg.appName || 'B').slice(0, 1) | uppercase }}</span>
           <a routerLink="/" class="brand-link">
             <strong>{{ cfg.appName }}</strong>
           </a>
-          <span class="muted">· powered by bookins.io permsets</span>
+          <span class="stack-pill" title="MongoDB + Express + Angular + Node fronted by Nginx">
+            MEAN + Nginx · Bookins PaaS
+          </span>
         </div>
 
         <span style="flex:1"></span>
 
         <ng-container *ngIf="auth.isAuthenticated$ | async; else loggedOut">
           <div class="nav-links" *ngIf="permsets.access$ | async as evalState">
-            <a *ngIf="evalState.isAuthorized" routerLink="/home" class="nav-link">Admin Workspace</a>
+            <a routerLink="/" class="nav-link">Overview</a>
+            <a routerLink="/home" class="nav-link">Member Workspace</a>
+            <a *ngIf="!evalState.hasOriginPermset" routerLink="/join" class="nav-link">
+              <button class="btn-sm">Become a Member</button>
+            </a>
 
             <!-- Top-right Credentials Dropdown (matching decenthealth & asot-amihuman) -->
             <div class="dropdown-container" *ngIf="auth.user$ | async as user">
@@ -38,21 +39,21 @@ import { Permset, PermsetService } from './permset.service';
                 class="user-toggle"
                 (click)="toggleDropdown()"
                 [attr.aria-expanded]="isDropdownOpen"
-                title="View your credentials"
+                title="View your disclosed PermSet credentials"
               >
-                <span class="user-handle">&#64;{{ user.nickname || user.name || 'admin' }}</span>
+                <span class="user-handle">&#64;{{ user.nickname || user.name || 'member' }}</span>
                 <span class="badge badge-ok" *ngIf="evalState.isHuman">amihuman</span>
-                <span class="badge badge-private" *ngIf="evalState.isIdrnAdmin">
-                  idrn · admin
-                </span>
-                <span class="badge badge-warn" *ngIf="!evalState.isIdrnAdmin && evalState.hasOriginPermset">
+                <span class="badge badge-private" *ngIf="evalState.hasOriginPermset">
                   {{ cfg.orgName | lowercase }} · member
+                </span>
+                <span class="badge badge-warn" *ngIf="!evalState.hasOriginPermset">
+                  no origin permset
                 </span>
                 <span class="caret" [class.open]="isDropdownOpen">▾</span>
               </button>
 
               <div class="dropdown-menu permset-dropdown" *ngIf="isDropdownOpen">
-                <div class="dropdown-heading">Your Credentials</div>
+                <div class="dropdown-heading">Your Disclosed Credentials</div>
 
                 <!-- Public permsets: ecosystem-wide -->
                 <div class="dropdown-section" *ngIf="evalState.publicPermsets.length > 0">
@@ -74,9 +75,7 @@ import { Permset, PermsetService } from './permset.service';
                   <div class="permset-entry" *ngFor="let p of evalState.originPrivatePermsets">
                     <div class="permset-name">
                       <code>{{ p.permset }}</code>
-                      <span class="tag tag-private">
-                        {{ p.description || (cfg.orgName + ' · private') }}
-                      </span>
+                      <span class="tag tag-private">{{ p.description || (cfg.orgName + ' · private') }}</span>
                     </div>
                     <p class="permset-explain">{{ privateExplanation(cfg, p) }}</p>
                   </div>
@@ -89,38 +88,54 @@ import { Permset, PermsetService } from './permset.service';
                     evalState.originPrivatePermsets.length === 0
                   "
                 >
-                  No permsets disclosed to this origin yet. An IDRN issuer must mint an
-                  <strong>IDRN Admin</strong> PermSet onto your Bookin.
+                  No permsets disclosed to this origin yet. Mint a PaaS Member PermSet in
+                  <strong>bookins.io</strong> or use <strong>Become a Member</strong> to unlock
+                  <code>{{ cfg.origin }}/home</code>.
                 </div>
 
                 <div class="sybil-note">
                   <strong>How these work together:</strong> Because your public
                   <a href="https://amihuman.org" target="_blank" rel="noopener">amihuman.org</a>
-                  humanity credential and your private <strong>IDRN Admin</strong> PermSet
+                  humanity credential and your private <strong>{{ cfg.orgName }}</strong> PermSet
                   are bound to the same pseudonymous handle, <strong>{{ cfg.appName }}</strong>
-                  verifies you are an authorized IDRN administrator without ever receiving your name,
-                  email, or street address.
+                  verifies you are an authorized real human without ever receiving your name, email,
+                  or street address.
                 </div>
               </div>
             </div>
 
-            <button class="secondary" (click)="logout()">Log out</button>
+            <button class="secondary btn-sm" (click)="logout()">Log out</button>
           </div>
         </ng-container>
 
         <ng-template #loggedOut>
-          <button (click)="login('/home')">IDRN Admin Login</button>
+          <div class="nav-links">
+            <a routerLink="/join" class="nav-link">Become a Member</a>
+            <button (click)="login('/home')">PermSet Member Login</button>
+          </div>
         </ng-template>
       </nav>
 
-      <router-outlet></router-outlet>
+      <main class="main-content">
+        <router-outlet></router-outlet>
+      </main>
+
+      <footer class="app-footer">
+        <div>
+          <strong>{{ cfg.appName }}</strong> ({{ cfg.orgName }}) · Origin
+          <code>{{ cfg.origin }}</code>
+        </div>
+        <div>
+          Nginx Front-Door (<code>:80</code>) &rarr; Express API (<code>127.0.0.1:3000</code>) &rarr;
+          Isolated K3s MongoDB · Powered by
+          <a href="https://bookins.io" target="_blank" rel="noopener">bookins.io</a>
+        </div>
+      </footer>
     </div>
-    </ng-template>
   `,
 })
 export class AppComponent implements OnInit {
   isDropdownOpen = false;
-  isLanding = true;
 
   constructor(
     public auth: AuthService,
@@ -130,11 +145,6 @@ export class AppComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.syncShell(this.router.url);
-    this.router.events.pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd)).subscribe((event) => {
-      this.syncShell(event.urlAfterRedirects);
-    });
-
     this.orgConfig.loadRuntimeConfig().subscribe();
 
     this.auth.appState$.subscribe((appState) => {
@@ -142,12 +152,6 @@ export class AppComponent implements OnInit {
         this.router.navigateByUrl(appState.target);
       }
     });
-  }
-
-  private syncShell(url: string): void {
-    const path = url.split('?')[0].split('#')[0];
-    this.isLanding = path === '/' || path === '';
-    document.body.classList.toggle('idrn-public-landing', this.isLanding);
   }
 
   toggleDropdown(): void {

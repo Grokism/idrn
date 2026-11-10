@@ -1,7 +1,7 @@
 {
   "name": "idrn",
   "version": "0.2.0",
-  "description": "the idrn client portal",
+  "description": "IDRN (IDRN)",
   "scripts": {
     "start": "ng serve",
     "server": "node server.mjs",

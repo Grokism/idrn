@@ -12,6 +12,9 @@ export interface Permset {
   url?: string;
   private?: boolean;
   status?: string;
+  roleKey?: string;
+  roleLabel?: string;
+  scopeTag?: string;
 }
 
 export interface PermsetsResponse {
@@ -24,11 +27,12 @@ export interface PermsetEvaluationState {
   accountType: string;
   isHuman: boolean;
   hasOriginPermset: boolean;
-  isIdrnAdmin: boolean;
   isAuthorized: boolean;
+  activeRoleKey: string;
+  activeRoleLabel: string;
+  activeScopeTag: string;
   publicPermsets: Permset[];
   originPrivatePermsets: Permset[];
-  adminPermsets: Permset[];
   allPrivatePermsets: Permset[];
 }
 
@@ -41,17 +45,38 @@ function normalizeOrigin(urlOrOrigin: string | undefined): string {
   }
 }
 
+function deriveRoleAndScope(perm: Permset | undefined): {
+  roleKey: string;
+  roleLabel: string;
+  scopeTag: string;
+} {
+  if (!perm) {
+    return { roleKey: 'member', roleLabel: 'Member', scopeTag: '' };
+  }
+  const desc = String(perm.description || '');
+  const bracketMatch = desc.match(/\[([^\]]+)\]/);
+  const scopeTag = (perm.scopeTag || (bracketMatch ? bracketMatch[1] : '') || '').trim();
+
+  if (perm.roleKey || perm.roleLabel) {
+    const roleKey = (perm.roleKey || perm.roleLabel || 'member')
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '_');
+    const roleLabel = perm.roleLabel || perm.roleKey || 'Member';
+    return { roleKey, roleLabel, scopeTag };
+  }
+
+  const cleanDesc = desc.replace(/\[[^\]]+\]/g, '').trim();
+  if (cleanDesc.toLowerCase().includes('admin')) {
+    return { roleKey: 'admin', roleLabel: 'Admin', scopeTag };
+  }
+  return { roleKey: 'member', roleLabel: cleanDesc || 'Member', scopeTag };
+}
+
 /**
  * Evaluates both:
  * 1) Public Amihuman humanity (`amihuman verified human`), and
- * 2) Origin-scoped private organization permsets (`permset.url === window.location.origin`).
- *
- * Combines the Auth0 ID token custom claim with a live registry check against
- * `GET https://bookins.io/api/dapp/permsets?url=<origin>` so private permsets are
- * always disclosed accurately even when multiple PaaS apps share a single Auth0 client ID.
- *
- * Cached via `shareReplay(1)` on `access$` so templates never create new Observable
- * instances during change detection.
+ * 2) Origin-scoped private organization permsets (`permset.url === window.location.origin`),
+ *    including dynamic PaaS role (`roleKey`, `roleLabel`) and cohort/scope tag (`scopeTag`).
  */
 @Injectable({ providedIn: 'root' })
 export class PermsetService {
@@ -76,11 +101,12 @@ export class PermsetService {
             accountType: 'user',
             isHuman: false,
             hasOriginPermset: false,
-            isIdrnAdmin: false,
             isAuthorized: false,
+            activeRoleKey: 'member',
+            activeRoleLabel: 'Member',
+            activeScopeTag: '',
             publicPermsets: [],
             originPrivatePermsets: [],
-            adminPermsets: [],
             allPrivatePermsets: [],
           });
         }
@@ -126,20 +152,20 @@ export class PermsetService {
               combined,
               normalizedTarget
             );
-            const adminPermsets = this.getIdrnAdminPermsets(originPrivatePermsets);
             const hasOriginPermset = originPrivatePermsets.length > 0;
-            const isIdrnAdmin = adminPermsets.length > 0;
+            const roleInfo = deriveRoleAndScope(originPrivatePermsets[0]);
 
             return {
               origin: normalizedTarget,
               accountType,
               isHuman,
               hasOriginPermset,
-              isIdrnAdmin,
-              isAuthorized: isHuman && isIdrnAdmin,
+              isAuthorized: isHuman && hasOriginPermset,
+              activeRoleKey: roleInfo.roleKey,
+              activeRoleLabel: roleInfo.roleLabel,
+              activeScopeTag: roleInfo.scopeTag,
               publicPermsets: mergedPublic,
               originPrivatePermsets,
-              adminPermsets,
               allPrivatePermsets: mergedPrivate,
             };
           })
@@ -157,8 +183,9 @@ export class PermsetService {
   private dedupePermsets(list: Permset[]): Permset[] {
     const mapByHandle = new Map<string, Permset>();
     for (const item of list) {
-      if (item && item.permset && !mapByHandle.has(item.permset)) {
-        mapByHandle.set(item.permset, item);
+      if (item && item.permset) {
+        const existing = mapByHandle.get(item.permset);
+        mapByHandle.set(item.permset, existing ? { ...existing, ...item } : item);
       }
     }
     return Array.from(mapByHandle.values());
@@ -201,18 +228,6 @@ export class PermsetService {
         p.description !== 'default permset' &&
         normalizeOrigin(p.url) === normalizedTarget
     );
-  }
-
-  /**
-   * Filters origin-scoped private PermSets to those designating an IDRN Administrator
-   * (e.g. `description: "IDRN Admin"`). Note: This is an application-level IDRN Admin
-   * PermSet minted onto an IDRN Bookin, NOT a Bookins orgAdmin / orgUser role.
-   */
-  getIdrnAdminPermsets(originPrivatePermsets: Permset[]): Permset[] {
-    return (originPrivatePermsets || []).filter((p) => {
-      const desc = String(p?.description || '').trim().toLowerCase();
-      return desc.includes('admin');
-    });
   }
 
   evaluateAccess(_targetOrigin?: string): Observable<PermsetEvaluationState> {

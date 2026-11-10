@@ -10,13 +10,13 @@ function resolvePlaceholder(val: string, fallback: string): string {
 const runtimeOrigin =
   typeof window !== 'undefined' && window.location?.origin
     ? window.location.origin
-    : resolvePlaceholder('https://idrn.bookins.io', 'https://localhost:4200');
+    : resolvePlaceholder('https://idrn.net', 'https://localhost:4200');
 
 export const environment = {
   production: true,
-  appName: resolvePlaceholder('IDRN Global Connections', 'IDRN Global Connections'),
+  appName: resolvePlaceholder('IDRN', 'Bookins PermSet App'),
   appDescription: resolvePlaceholder(
-    'IDRN Global Connections — Zero-PII Administrator Portal',
+    'IDRN (IDRN)',
     'Zero-PII identity and origin-scoped authorization powered by bookins.io'
   ),
   bookinsApiBase: 'https://bookins.io',

@@ -27,7 +27,7 @@ cat <<EOF
 Done. The service is available in-cluster at:
   http://${APP_SLUG}-fe.${NAMESPACE}.svc.cluster.local:80
 
-Next: map your public hostname (https://idrn.bookins.io) to that in-cluster service.
+Next: map your public hostname (https://idrn.net) to that in-cluster service.
 If you use Cloudflare Tunnel, add a public hostname in the Cloudflare Zero Trust
-dashboard pointing https://idrn.bookins.io -> http://${APP_SLUG}-fe.${NAMESPACE}.svc.cluster.local:80
+dashboard pointing https://idrn.net -> http://${APP_SLUG}-fe.${NAMESPACE}.svc.cluster.local:80
 EOF

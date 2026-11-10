@@ -4,6 +4,7 @@ import { AuthService } from '@auth0/auth0-angular';
 import { firstValueFrom } from 'rxjs';
 import { filter, take } from 'rxjs/operators';
 import { environment } from '../environments/environment';
+import { PaasRoleSpec } from './org-config.service';
 
 export interface MembershipStatus {
   registered: boolean;
@@ -14,6 +15,8 @@ export interface MembershipStatus {
   origin?: string;
   appName?: string;
   orgName?: string;
+  permsetRoles?: PaasRoleSpec[];
+  selfEnrollRoles?: PaasRoleSpec[];
 }
 
 export interface EnrollmentRequest {
@@ -28,6 +31,8 @@ export interface EnrollmentRequest {
     zipCode: string;
   };
   notifyByEmail?: boolean;
+  roleKey?: string;
+  scopeTag?: string;
 }
 
 export interface EnrollmentResult {

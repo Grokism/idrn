@@ -1,0 +1,51 @@
+---
+description: Bookins.io PermSet MEAN Stack Template Developer Guide — rules for customizing Angular UI, Express routes, MongoDB collections, and bookins-template.json in Cursor
+globs: **/*
+alwaysApply: true
+---
+
+# Bookins.io PermSet MEAN Stack Template — Cursor Developer Rules
+
+This repository is a **Bookins.io Starter Web Template** (MongoDB + Express + Angular 18 + Node.js behind Nginx).
+Developers can clone this template repository, customize the UI and backend in Cursor or any IDE, and push their modified template to a GitHub repository. Organization Users (`orgUsers`) in Bookins.io can then select that GitHub repository via **Use Template** to provision a live, PermSet-enabled application pushed to their own standalone GitHub repository.
+
+## 1. How Developer Customizations Are Preserved (`preserveDeveloperPages: true`)
+
+- Keep `"preserveDeveloperPages": true` in `bookins-template.json`.
+- When an `orgUser` provisions an app from your GitHub template repository, Bookins.io pulls your repo **read-only**, keeps your custom Angular components (`src/app/pages/landing.component.ts`, `src/app/pages/home.component.ts`, and any new components/routes you create) and Express backend (`server.mjs`) intact, and injects the `orgUser`'s questionnaire answers, roles, and uploaded images into `src/app/template-config.ts` (`TEMPLATE_CONFIG`) as well as runtime `/api/paas/org-config` (`OrgConfigService.config$`).
+- Read questionnaire answers in Angular via `TEMPLATE_CONFIG.templateAnswers['yourKey']` or `cfg.appBlueprint?.templateAnswers?.['yourKey']` from `OrgConfigService`.
+
+## 2. Defining Custom Template Questions & PermSet Roles (`bookins-template.json`)
+
+- Edit `bookins-template.json` at the repository root to customize:
+  - `cardTitle`, `cardBadge`, `summary`, `defaultTheme` (`ocean_teal`, `daycare_sunrise`, `emerald_commerce`, `clinical_blue`, `civic_gold`, `midnight_slate`)
+  - `defaultRoles`: Array of PermSet roles (`roleKey`, `roleLabel`, `purpose`, `enrollmentPolicy: "issuer_only" | "self_enroll"`, `scopeLabel`). Bookins automatically registers these roles on the organization's **Add Permset** page.
+  - `templateQuestions`: Array of tailored form questions (`key`, `label`, `placeholder`, `hint`, `defaultValue`, `multiline`) shown to the `orgUser` when they click **Use Template** in Bookins.io.
+
+## 3. PermSet Authentication & Role-Based Authorization Contract
+
+### Angular Frontend (`PermsetService`)
+- Inject `PermsetService` (`src/app/permset.service.ts`) and subscribe to `permsets.access$`:
+  - `evalState.isHuman`: `true` when the user holds an active public `amihuman` humanity credential.
+  - `evalState.hasOriginPermset`: `true` when the user holds an active private PermSet whose `url` matches `window.location.origin`.
+  - `evalState.isAuthorized`: `true` when both `isHuman && hasOriginPermset`.
+  - `evalState.activeRoleKey`: Normalized role key (e.g. `'teacher'`, `'parent'`, `'staff'`, `'client'`, `'admin'`, `'member'`).
+  - `evalState.activeRoleLabel`: Human-readable role badge (e.g. `'Teacher'`, `'Parent'`).
+  - `evalState.activeScopeTag`: Optional non-PII cohort/project/classroom tag extracted from the PermSet (e.g. `'room-sunflower'`, `'proj-kitchen-204'`).
+
+### Express + Isolated MongoDB Backend (`server.mjs`)
+- Protect `/api/*` endpoints with the `requireOriginPermset` middleware in `server.mjs`.
+- Every authenticated request populates `req.member`:
+  - `req.member.permset`: The caller's opaque `ps_...` PermSet handle (use this as the primary key/owner key in MongoDB—never store real names, emails, or street addresses).
+  - `req.member.roleKey` & `req.member.roleLabel`: The caller's PermSet role.
+  - `req.member.scopeTag`: The caller's cohort/project tag for filtering shared records.
+- Always obtain the database handle via `const database = await getDb();`. Never hardcode credentials; Kubernetes injects `MONGO_URI` and `DB_NAME` (`paas_<appSlug>`) automatically at runtime.
+
+## 4. Protected Protocol Files (Do Not Delete)
+
+The GitHub Actions build pipeline (`.github/workflows/deploy.yml`) verifies that these Bookins PermSet files remain present:
+- `src/app/guards/private-permset.guard.ts` & `src/app/guards/amihuman.guard.ts`
+- `src/app/permset.service.ts` & `src/app/membership.service.ts`
+- `src/app/pages/join.component.ts`
+- `src/app/app.component.ts` (must preserve `loginWithRedirect` and `.permset-dropdown`)
+- `nginx.conf`, `docker-entrypoint.sh`, and `server.mjs` (must preserve `/api/health`, `/api/records`, and `requireOriginPermset`)

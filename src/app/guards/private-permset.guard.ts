@@ -30,12 +30,12 @@ export const privatePermsetGuard: CanActivateFn = (_route, state) => {
       return permsets.access$.pipe(
         take(1),
         map((evalState) => {
-          if (evalState.isHuman && evalState.isIdrnAdmin) {
+          if (evalState.isHuman && evalState.hasOriginPermset) {
             return true;
           }
-          return router.createUrlTree(['/'], {
+          return router.createUrlTree(['/join'], {
             queryParams: {
-              reason: !evalState.isHuman ? 'missing_humanity' : 'missing_admin_permset',
+              reason: !evalState.isHuman ? 'missing_humanity' : 'missing_org_permset',
             },
           });
         })
@@ -43,5 +43,3 @@ export const privatePermsetGuard: CanActivateFn = (_route, state) => {
     })
   );
 };
-
-export const idrnAdminGuard: CanActivateFn = privatePermsetGuard;
